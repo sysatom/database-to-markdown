@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"strings"
 	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
@@ -92,7 +92,7 @@ func main() {
 	}
 
 	// Markdown
-	var markdown bytes.Buffer
+	var markdown strings.Builder
 	for _, table := range tables {
 		var columns []Column
 		err = db.Select(&columns, "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", database, table.TableName)
@@ -101,7 +101,7 @@ func main() {
 			panic(err)
 		}
 
-		var comment bytes.Buffer
+		var comment strings.Builder
 		if utf8.RuneCountInString(table.TableComment) > 0 {
 			comment.WriteString(fmt.Sprintf(" ( %s ) ", table.TableComment))
 		}
@@ -117,7 +117,7 @@ func main() {
 	}
 
 	// Write File
-	err = ioutil.WriteFile("./docs/schema.md", markdown.Bytes(), 0644)
+	err = ioutil.WriteFile("./docs/schema.md", []byte(markdown.String()), 0644)
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
