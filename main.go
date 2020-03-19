@@ -73,7 +73,8 @@ func main() {
 	host := os.Args[3]
 	database := os.Args[4]
 
-	mysqlDSN := user + ":" + password + "@tcp(" + host + ")/" + database + "?parseTime=true&loc=Asia%2FShanghai"
+	// Conn
+	mysqlDSN := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&loc=Asia%%2FShanghai", user, password, host, database)
 	db, err := sqlx.Open("mysql", mysqlDSN)
 	if err != nil {
 		fmt.Println(err)
@@ -81,39 +82,41 @@ func main() {
 	}
 	defer db.Close()
 
+	// Tables
 	var tables []Table
-	err = db.Select(&tables, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '"+database+"'")
+	err = db.Select(&tables, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ?", database)
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
 	}
 
-	markdown := ""
+	// Markdown
+	var markdown bytes.Buffer
 	for _, table := range tables {
-
 		var columns []Column
-		err = db.Select(&columns, "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '"+database+"' AND TABLE_NAME = '"+table.TableName+"'")
+		err = db.Select(&columns, "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", database, table.TableName)
 		if err != nil {
 			fmt.Println(err)
 			panic(err)
 		}
 
-		comment := ""
+		var comment bytes.Buffer
 		if utf8.RuneCountInString(table.TableComment) > 0 {
-			comment += " (" + table.TableComment + ") "
+			comment.WriteString(fmt.Sprintf(" ( %s ) ", table.TableComment))
 		}
-		markdown += "## " + table.TableName + comment + "\n\n"
-		markdown += "| COLUMN_NAME |    COLUMN_TYPE   | COLUMN_DEFAULT | IS_NULLABLE | COLUMN_KEY |     EXTRA      | COLUMN_COMMENT |\n"
-		markdown += "|-------------|------------------|----------------|-------------|------------|----------------|----------------|\n"
+		markdown.WriteString(fmt.Sprintf("## %s %s\n\n", table.TableName, comment.String()))
+		markdown.WriteString("| COLUMN_NAME |    COLUMN_TYPE   | COLUMN_DEFAULT | IS_NULLABLE | COLUMN_KEY |     EXTRA      | COLUMN_COMMENT |\n")
+		markdown.WriteString("|-------------|------------------|----------------|-------------|------------|----------------|----------------|\n")
 
 		for _, column := range columns {
-			markdown += "| " + column.ColumnName + " | " + column.ColumnType + " | " + NullString2String(column.ColumnDefault) + " | " + column.IsNullable + " | " + column.ColumnKey + " | " + column.Extra + " | " + column.ColumnComment + " |\n"
+			markdown.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n", column.ColumnName, column.ColumnType, NullString2String(column.ColumnDefault), column.IsNullable, column.ColumnKey, column.Extra, column.ColumnComment))
 		}
 
-		markdown += "\n\n"
+		markdown.WriteString("\n\n")
 	}
 
-	err = ioutil.WriteFile("./schema.md", []byte(markdown), 0644)
+	// Write File
+	err = ioutil.WriteFile("./docs/schema.md", markdown.Bytes(), 0644)
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
